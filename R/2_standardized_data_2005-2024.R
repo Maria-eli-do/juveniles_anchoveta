@@ -155,6 +155,7 @@ names(base[, 18:48]); df <- base[, 18:48]; names(df) <- seq(5, 20, .5)
 base2 <- base[, c("LONG", "LAT", "ESPECIE", "CAPTURA (t)", "REGION", "FABRICA", 
                  "EMBARCACION", "MATRICULA", "CB", "TIPO DE FLOTA", 
                  "PUERTO", "AREA", "DIA")]
+
 base2 <- cbind(base2, df)
 base2$'19' <- as.numeric(base2$'19')
 base2$'19.5' <- as.numeric(base2$'19.5')

@@ -1,54 +1,23 @@
 rm(list = ls()); gc(reset = T)
+# -----------------------------------------------------------------------------------------------------------------
 # Cargar archivos y paqueterías necesarias
 require(grDevices)
 require(fenix)
 require(ggplot2)
-#install.packages("lubridate")
 require(lubridate)
+require(dplyr)
 # devtools::install_github("PabloMBooster/fenix")
-#base -----------------------------------------------------
-file <- "cin/STANDARIZED_DATA_TOTAL_1972_2024.csv"
-data <- read.csv(file, header = T, encoding = "UTF-8")
-data$YEAR <- year(data$DIA)
-data$MONTH <- month(data$DIA)
-data$YEAR_SB <- data$YEAR
-data$YEAR_SB[data$MONTH %in% 1:3] <- rep(data$YEAR - 1, length.out = sum(data$MONTH %in% 1:3))
-data$SEMESTRE <- 1
-data$SEMESTRE[data$MES %in% c(1:3,10:12)] <- 2
-data$SemB <- paste0("Sem. ",data$YEAR_SB,"-",data$SEMESTRE)
-
-#data <- data[data$SemB == "Sem. 2001-1",]
-
-#juveniles------------------------------------------------------------------
-a = 0.0036
-b = 3.2380
-
-marks <- seq(5, 20, .5)
-peso <- a*(marks^b)
-plot(marks, peso)  
-
-freqsim_num <- data[, paste0("X", marks)]
-freqsim_pes <- sweep(freqsim_num, 2, peso, "*")
-# freqsim_pes[852, ]; freqsim_num[852,]*peso 
-peso_m <- rowSums(freqsim_pes, na.rm = T)
-fx <- (data$CAPTURA..t.)*1e6/peso_m
-hist((log(fx+1)))
-freqsim_num_pon <- sweep(freqsim_num, 1, fx, "*")
-# sum(freqsim_num_pon[654, ]*peso, na.rm = TRUE)/1E6; data$CAPTURA..t.[654]
-
-data$CAPTURA..n. <- rowSums(freqsim_num_pon, na.rm = TRUE)  
-data$juv_n <- rowSums(freqsim_num_pon[, marks < 12], na.rm = TRUE)  
-temp_peso <- freqsim_num_pon[, marks < 12]  
-temp_peso <- sweep(temp_peso, 2, peso[marks < 12], "*")
-data$juv_p  <- rowSums(temp_peso, na.rm = TRUE)/1E6
-
-base <- as.data.frame(data)
+# -----------------------------------------------------------------------------------------------------------------
+USB <- "I:/"
+dir_cin <- file.path(USB, "database/cin/")
+dir_out <- file.path("cout/")
+File   <- file.path(dir_cin, "DATA_JUVENILES_1972_2024.csv")
+base   <- read.csv(File, encoding = "latin1", header = TRUE)
 
 # Cargar datos Mapa Perú --------------------------------------------------
 rbPal = colorRampPalette(c("#99CCCC", "#99CC33", "#00FF00","#006633",
                            "#FFFF00", "#FF8000", "#FF0000", "#800000", "black"))
 PalCols = rbPal(101)
-
 
 areaPeru = data.frame(x = c(linePeru$lon[1], -50, -50, linePeru$lon[23513:2], 
                             linePeru$lon[1]), y = c(linePeru$lat[1], -24, 0, 
@@ -62,24 +31,18 @@ datosPuertos$names[15] <- "B. Independencia"
 
 base$LONG = abs(base$LONG)
 base$LAT = abs(base$LAT)
-
-SB = unique(base$SemB)
+SB = unique(base$SEMB)
 
 data_Mapas_SemBiol = NULL
 for (s in seq_along(SB)) {
-  
-  dato_SemBiol = base[base$SemB %in% SB[s],]
-  
-  
+  print(SB[s])
+  dato_SemBiol = base[base$SEMB %in% SB[s],]
   grid = 1/12 # tamaño de grilla
   
   # Mapa relación Juv/Total
-  
   xbins <- seq(70, 92, by = grid)
   ybins <- seq(4, 19, by = grid)
-  
-  
-  require(dplyr)
+
   # Create a 2D binned statistic
   Resumen <- dato_SemBiol %>%
     mutate(
@@ -88,8 +51,8 @@ for (s in seq_along(SB)) {
     ) %>%
     dplyr::group_by(bin_x, bin_y) %>%
     summarise(
-      sum_Juv = sum(juv_p), #Nombre de columna de captura de juveniles
-      sum_Ton = sum(CAPTURA..t.) #Nombre de columna de captura total
+      sum_Juv = sum(JUV_P), #Nombre de columna de captura de juveniles
+      sum_Ton = sum(CAPTURA_P) #Nombre de columna de captura total
     ) %>%
     mutate(
       juvR = ifelse(sum_Juv == 0, NA, ifelse(sum_Ton != 0, sum_Juv / sum_Ton, NA))
@@ -111,7 +74,7 @@ for (s in seq_along(SB)) {
 
 
 # Obtener los valores únicos de Semestre biológicos y dividirlos en grupos de 0
-weeks_unicas <- as.vector(sort(unique(base$SemB)))
+weeks_unicas <- as.vector(sort(unique(base$SEMB)))
 grupos_week <- split(weeks_unicas, ceiling(seq_along(weeks_unicas) / 16))
 
 # Crear una lista para almacenar los gráficos
@@ -125,17 +88,17 @@ for (i in seq_along(grupos_week)) {
   # Filtrar los datos para el grupo de SemB
   datos_filtrados <- data_Mapas_SemBiol %>% filter(SemB %in% SemB_grupo)
 
-  graficos[[i]] <- datos_filtrados %>% ggplot()+
+  graficos[[i]] <- datos_filtrados %>% ggplot() +
   stat_summary_2d(aes(x = bin_x, y = bin_y, z = juvR),
-                  fun = "sum", binwidth= 1/12)+
+                  fun = "sum", binwidth= 1/12) +
   facet_wrap(~SemB, ncol = 4, nrow = 4)+ 
-  coord_fixed(xlim = c(-81,-72), ylim = c(-18,-4)) +
+  coord_fixed(xlim = c(-84,-70), ylim = c(-18, -4)) + 
   geom_polygon(data = areaPeru, aes(x = x, y = y),
                fill = "khaki1", colour = "black") +
   geom_text(data = datosPuertos,
-            mapping = aes(x = lon+0.15, y = lat, label = names), size = 6,
-            hjust = 0, colour = "gray20")+
-  scale_fill_gradientn(colours = PalCols, name = "Porc. (%)", limits = c(0,100))+
+            mapping = aes(x = lon+ 0.15, y = lat, label = names), size = 3,
+            hjust = 0, colour = "gray20") +
+  scale_fill_gradientn(colours = PalCols, name = "Porc. (%)", limits = c(0,100)) +
   theme_bw() +
   labs(title = "Captura relativa de juveniles por semana", x = "Longitud", y = "Latitud") +
   theme(panel.background = element_rect(fill = "white"),
@@ -151,12 +114,13 @@ for (i in seq_along(grupos_week)) {
                      labels = c("4°S","6°S","8°S","10°S","12°S","14°S","16°S","18°S"))+
   scale_x_continuous(breaks = c(-81,-78,-75,-72),
                      labels = c("81°W","78°W","75°W","72°W")) +
-  theme(text = element_text(size = 30))
-  axis.text.x = element_text(, size = 24)
+    theme(text = element_text(size = 30), 
+          axis.text.x = element_text(size = 20), 
+          axis.text.y = element_text(size = 20))
 }  
  
 # Guardar los gráficos
 for (i in seq_along(graficos)) {
-  ggsave(paste0("cout/MapaJuvenil_SemB_p", i, ".png"), plot = graficos[[i]], width = 16.5, height = 23.4, 
-         units = "in")
+  ggsave(file.path(dir_out, paste0("Mapas_Juveniles_SemB_p", i, ".png")), plot = graficos[[i]], 
+         width = 16.5, height = 23.4, units = "in")
 }

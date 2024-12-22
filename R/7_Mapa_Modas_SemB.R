@@ -1,12 +1,17 @@
+rm(list = ls()); gc(reset = T)
+# -----------------------------------------------------------------------------------------------------------------
 # Cargar archivos y paqueterías necesarias
 require(grDevices)
 require(fenix)
 require(ggplot2)
-# En caso de no tener fenix, instalarlo
 #devtools::install_github("PabloMBooster/fenix")
+# -----------------------------------------------------------------------------------------------------------------
+USB <- "I:/"
+dir_cin <- file.path(USB, "database/cin/")
+dir_out <- file.path("cout/")
 
-
-#base = read....
+File   <- file.path(dir_cin, "DATA_JUVENILES_1972_2024.csv")
+base   <- read.csv(File, encoding = "latin1", header = TRUE)
 
 # Paleta de colores de moda
 rbPalTM = colorRampPalette(c("#FF0000", "#FF0C00", "#FF2200", "#FF3C00",
@@ -27,10 +32,10 @@ datosPuertos = data.frame(lon = puertos$lon,
                           names = as.character(puertos$puertos))
 datosPuertos$names[15] <- "B. Independencia"
 
-
+(range(base$MODA, na.rm = TRUE))
 # Obtener los valores únicos de Semestre biológicos y dividirlos en grupos de 20
-weeks_unicas <- unique(base$SemB)
-grupos_week <- split(weeks_unicas, ceiling(seq_along(weeks_unicas) / 20))
+weeks_unicas <- unique(base$SEMB)
+grupos_week <- split(weeks_unicas, ceiling(seq_along(weeks_unicas) / 16))
 
 # Crear una lista para almacenar los gráficos
 graficos <- list()
@@ -40,21 +45,25 @@ for (i in seq_along(grupos_week)) {
   SemB_grupo <- grupos_week[[i]]
   
   # Filtrar los datos para el grupo de SemB
-  datos_filtrados <- base %>% filter(SemB %in% SemB_grupo)
+  datos_filtrados <- base %>% filter(SEMB %in% SemB_grupo)
+  
+  observaciones <- datos_filtrados %>%
+    group_by(SEMB) %>%
+    summarise(n_obs = n())
   
   # Crear el gráfico
-  graficos[[i]] <- datos_filtrados %>%
-  geom_point(aes(long, lati, fill = moda), # colocar nombres de columnas de lon, lat y moda en la base
-             size = 2, shape=21, col = "black") +   
-  coord_fixed(xlim = c(-84,-70), ylim = c(-18.5,-4)) + 
+  graficos[[i]] <- datos_filtrados %>% ggplot() +
+  geom_point(aes(LONG, LAT, fill = MODA), # colocar nombres de columnas de lon, lat y moda en la base
+             size = 2, shape= 21, col = "black") +   
+  coord_fixed(xlim = c(-84,-70), ylim = c(-18, -4)) + 
   geom_polygon(data = areaPeru, aes(x = x, y = y),
                fill = "khaki1", colour = "black") +
   geom_text(data = datosPuertos,
-            mapping = aes(x = lon+0.15, y = lat, label = names), size = 4.5, #ajustar tamaño del texto de los puertos
-            hjust = 0, colour = "gray20")+
+            mapping = aes(x = lon+0.15, y = lat, label = names), size = 3, #ajustar tamaño del texto de los puertos
+            hjust = 0, colour = "gray20") +
   scale_fill_gradientn(colours = PalColsTM,
                        name = "Moda (cm)",
-                       limits = c(0,20), breaks = c(4,8,12,16), labels = c(4,8,12,16))+    
+                       limits = c(5,18.5), breaks = c(5,8,12,16, 18.5), labels = c(5,8,12,16, 18.5)) +    
   theme_bw() +
   labs(title = "Modas ", x = "Longitud", y = "Latitud") +
   theme(panel.background = element_rect(fill = "white"),
@@ -70,12 +79,17 @@ for (i in seq_along(grupos_week)) {
                      labels = c("4°S","6°S","8°S","10°S","12°S","14°S","16°S","18°S"))+
   scale_x_continuous(breaks = c(-81,-78,-75,-72),
                      labels = c("81°W","78°W","75°W","72°W")) +
-  facet_wrap(~SemB, ncol = 5, nrow = 4)+ #colocar en lugar de SemB el semestre biológico
-  theme(text = element_text(size = 30))
+  facet_wrap(~SEMB, ncol = 4, nrow = 4) +
+    geom_text(data = observaciones, 
+              aes(x = -72.0, y = -4.5, label = paste("n =", n_obs)), 
+              inherit.aes = FALSE, size = 5, color = "black") +
+    theme(text = element_text(size = 30), 
+        axis.text.x = element_text(size = 20), 
+        axis.text.y = element_text(size = 20))
 }
 
 # Guardar los gráficos
 for (i in seq_along(graficos)) {
-  ggsave(paste0("MapaModa_SemB_p", i, ".png"), plot = graficos[[i]], width = 15, height = 10)
+  ggsave(file.path(dir_out, paste0("Mapas_Moda_SemB_p", i, ".png")), plot = graficos[[i]], 
+         width = 16.5, height = 23.4, units = "in")
 }
-

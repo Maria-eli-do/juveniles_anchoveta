@@ -12,9 +12,10 @@ USB <- "I:/"
 dir_cin <- file.path(USB, "database/cin/")
 dir_raw <- file.path(USB, "database/rawdat/")
 
-outFile   <- file.path(dir_cin, "STANDARIZED_DATA_TOTAL_1972_2024.csv")
-fileone   <- file.path(dir_cin, "STANDARIZED_DATA_TOTAL_2005_2024.csv")
-filetwo   <- file.path(dir_cin, "STANDARIZED_DATA_1972_2014.csv")
+outFile   <- file.path(dir_cin, "DATA_JUVENILES_1972_2024.csv")
+
+fileone  <- file.path(dir_cin, "STANDARIZED_DATA_1972_2014.csv")
+filetwo  <- file.path(dir_cin, "STANDARIZED_DATA_TOTAL_2005_2024.csv")
 filethree <- file.path(dir_cin, "STANDARIZED_IMARSIS_2016-2019.csv")
 filefour  <- file.path(dir_cin, "STANDARIZED_IMARSIS_2018-2021.csv")
 
@@ -42,6 +43,9 @@ data$DIA <- as.Date(data$DIA)
 data$MES <- month(data$DIA)
 data$YEAR <- year(data$DIA)
 
+tt <- as.data.frame.table(table(data$YEAR))
+plot(as.numeric(as.character(tt$Var1)), tt$Freq, type = "o", xlab = "Año", ylab = "Frecuencia", main = "Frecuencia de muestreo", col = "blue")
+
 #PUERTOS SUMADOS --------
 data$PUERTO <- toupper(trimws(data$PUERTO))
 data$PUERTO <- gsub("CARQUIN", "HUACHO", data$PUERTO) 
@@ -67,14 +71,18 @@ data$PUERTO[data$PUERTO == "PLANCHADA"] <- "LA PLANCHADA"
 data$PUERTO[data$PUERTO == "QUILCA"] <- "MOLLENDO"
 data$PUERTO[data$PUERTO == "ILO(GRAU)"] <- "ILO"
 data$PUERTO[data$PUERTO == "SAMANCOS"] <- "SAMANCO"
+data$PUERTO[data$PUERTO == "LAGUNILLAS"] <- "PISCO"
+data$PUERTO[data$PUERTO == "LAGUNA GRANDE"] <- "PISCO"
+
 table(data$PUERTO)[order(table(data$PUERTO), decreasing = T)]
 
 #LIMPIEZA PARA IDONEIDAD DEL MUESTREO-------------------------------------------
 nobs   <- nrow(data)
 id.spt <- is.na(data$AREA) & is.na(data$LONG) & is.na(data$LAT)
 data   <- data[-id.spt, ]
-data$LAT[data$LAT == 0] <- NA
+data$LAT[data$LAT == 0]   <- NA
 data$LONG[data$LONG == 0] <- NA
+data$CB[data$CB <= 0]     <- NA
 
 data$AREA    <- as.numeric(data$AREA)
 areaISO$AREA <- as.numeric(areaISO$AREA)
@@ -86,10 +94,15 @@ data$dc <- estima_dc2(lon = data$LONG, lat = data$LAT, polygon = PERU_SP)
 data <- data[data$dc <= 160, ]
 nobs2  <- nrow(data)
 
+tt <- as.data.frame.table(table(data$YEAR))
+plot(as.numeric(as.character(tt$Var1)), tt$Freq, type = "o", xlab = "Año", ylab = "Frecuencia", main = "Frecuencia de muestreo", col = "blue")
+
 data$nAnc <- rowSums(data[, as.character(marks)], na.rm = T)
 data$nAnc <- round(data$nAnc, 0)
 data <- data[data$nAnc >= 120, ]
 nobs3 <- nrow(data)
+tt <- as.data.frame.table(table(data$YEAR))
+lines(as.numeric(as.character(tt$Var1)), tt$Freq, type = "o", xlab = "Año", ylab = "Frecuencia", main = "Frecuencia de muestreo", col = "red")
 
 data$CAPTURA..t. <- as.numeric(data$CAPTURA..t.)
 data <- data[which(!is.na(data$CAPTURA..t.) | data$CAPTURA..t. != 0), ]
@@ -136,8 +149,36 @@ data$key <- paste(data$DIA, data$CAPTURA..n., data$nAnc,
 
 key <- names(table(data$key)[table(data$key) > 1])
 
-data[data$key == key[1],]
+id_ommit <- NULL
+for (t in 1:length(key)) {
+  print(t)
+  tmp <- data[data$key == key[t],]
+  idna <- which.min(colSums(apply(tmp, 1, is.na)))
+  id_ommit <- c(id_ommit, tmp$Nid[-idna])
+}
 
 
-# write.csv(data, outFile, row.names = F)
+data  <- data[-id_ommit, ]
+nobs5 <- nrow(data)
+names(data)
 
+data <- data[, 1:52]
+names(data)[4]  <- "CAPTURA_P"
+names(data)[48] <- "MUESTREO_N"
+names(data)[50] <- "CAPTURA_N"
+names(data)[10] <- "TIPO_FLOTA"
+
+names(data) <- toupper(names(data))
+data        <- data[c(1:13,46, 45, 47:52,14:44)]
+data        <- data[order(data$YEAR, data$MES, data$PUERTO), ]
+names(data)
+
+data$YEAR_SB <- data$YEAR
+data$YEAR_SB[data$MONTH %in% 1:3] <- data$YEAR[data$MONTH %in% 1:3] - 1
+
+data$SEMESTRE <- 1
+data$SEMESTRE[data$MES %in% c(1:3,10:12)] <- 2
+data$SEMB <- paste0("Sem. ",data$YEAR_SB,"-",data$SEMESTRE)
+
+write.csv(data, outFile, row.names = F)
+(outFile)
